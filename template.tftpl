@@ -1,0 +1,70 @@
+#!/bin/bash
+FLAG="/var/log/firstboot.log"
+if [[ -f $FLAG ]]; then
+  logger "=================Not first boot. Abort script==============="
+  exit 0
+fi
+
+logger "=================First boot. Writing flag=================="
+touch "$FLAG"
+
+#Enable IP forwarding
+sed -i 's/#net.ipv4.ip_forward=1/net.ipv4.ip_forward=1/' /etc/sysctl.conf
+sysctl -p
+
+#Update and install wireguard
+apt-get remove -y --purge man-db
+apt-get update && apt upgrade -y
+apt-get install ufw wireguard wireguard-tools linux-headers-$(uname -r) -y
+
+#generate keys on server
+wg genkey | sudo tee /etc/wireguard/server_private.key | wg pubkey | sudo tee /etc/wireguard/server_public.key
+
+#Create the WireGuard Network Device
+PRIVATEKEY="$(cat /etc/wireguard/server_private.key)"
+DEFAULTNIC=$(ip -o -4 route show to default | awk '{print $5}')
+cat << CONF > /etc/wireguard/wg0.conf
+[Interface]
+Address = 192.168.15.1/24
+ListenPort = 51820
+PrivateKey = $PRIVATEKEY # Contents of file wg-private.key that was recently created
+ListenPort = 51820
+
+# Routing
+PostUp = iptables -A FORWARD -i %i -j ACCEPT; iptables -t nat -A POSTROUTING -o $DEFAULTNIC -j MASQUERADE
+PostDown = iptables -D FORWARD -i %i -j ACCEPT; iptables -t nat -D POSTROUTING -o $DEFAULTNIC -j MASQUERADE
+SaveConfig = true
+
+#Peer section, add client data here
+[Peer]
+PublicKey = UqjIBIcx4FLq/IpIciP6fZ9diR18ryvQy+6Km/k5UXU=# Public key from client device
+AllowedIPs = 192.168.15.2/32 # the IP address of the client on the WireGuard network
+CONF
+
+
+# Create wireguard network device at /etc/network/interfaces.d/wg0
+#cat << WG0-DEVICE >/etc/network/interfaces.d/wg0
+# Indicate that wg0 should be created when the system boots, and on ifup -ap
+#auto wg0
+
+# describe wg0 as an IPv4 interface with static address
+#iface wg0 inet static
+
+# static IP address 
+#address ${wgip}
+
+# before ifup, create the device with this ip link command
+#pre-up ip link add wg0 type wireguard
+
+# before ifup, set the WireGuard config from earlier
+#pre-up wg setconf wg0 /etc/wireguard/wg0.conf
+
+# after ifdown, destroy the wg0 interface
+#post-down ip link del wg0
+WG0-DEVICE
+
+#Set permissions
+chmod -R 600 /etc/wireguard
+
+#Start WireGuard.
+#wg-quick up wg0

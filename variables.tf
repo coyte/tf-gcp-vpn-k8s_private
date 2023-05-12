@@ -1,0 +1,14 @@
+variable "projejctid" {}
+variable "vpcname" {}
+variable "subnetname" {}
+variable "region" {}
+variable "zone" {}
+variable "subnetcidr" {}
+variable "wgip" {}
+variable "clustername" {}
+variable "master_ipv4_cidr_block" {}
+variable "cluster_ipv4_cidr_block" {}
+variable "services_ipv4_cidr_block" {}
+variable "master_authorize_cidr" {}
+#variable "jumphost_ip" {}
+#variable "jumphost_name" {}
